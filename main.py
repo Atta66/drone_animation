@@ -1,120 +1,125 @@
 import pygame
 
-# Initialize pygame
+from drone_instance import drone_instance
+
 pygame.init()
 
-# Define colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-GREY = (128, 128, 128)  # Added
+GREY = (128, 128, 128)
 
+total_num = 2
 
-
-# Define the size of each cell in the grid
 CELL_SIZE = 50
 
-# Define the size of the window
 WINDOW_SIZE = CELL_SIZE * 9
 
-def move_drone(x, y):
-    # Convert grid coordinates to pixel coordinates
-    x_pixel = x * CELL_SIZE
-    y_pixel = y * CELL_SIZE
-
-    # Set the center of the image rectangle to the center of the cell
-    drone_rect.center = (x_pixel + CELL_SIZE / 2, y_pixel + CELL_SIZE / 2)
-
-    # Draw the image on the screen
-    screen.blit(drone, drone_rect)
-
-    # Return None
-    return None
-
-# Create the display surface
 screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
 
-# Set the title of the window
 pygame.display.set_caption("Tunnel")
 
 
-# Load the image
-drone = pygame.image.load("drone.png") # Added
+drone = {}
 
-drone = pygame.transform.scale(drone, (CELL_SIZE, CELL_SIZE)) # Added
+def drone_instanciater(total_num):
 
-prev_x, prev_y = [4,8]
+    for num in range(total_num):
+        
+        drone_init = drone_instance(CELL_SIZE)
+        drone[f'{num+1}'] = drone_init.start_instance()
+        drone[f'prev{num+1}_x'] = 4
+        drone[f'prev{num+1}_y'] = 8
+        drone[f'drone_rect{num+1}'] = drone_init.create_rect()
+        
+drone_instanciater(total_num)
 
-# Get the size of the image
-drone_rect = drone.get_rect() # Added
-
-# Loop until the user clicks the close button
 done = False
 
-# Used to manage how fast the screen updates
-clock = pygame.time.Clock()
-
-# # Main program loop
-# if not done:
-# Process events (keystrokes, mouse clicks, etc)
-for event in pygame.event.get():
-    # User clicked close
-    if event.type == pygame.QUIT:
-        # Flag that we are done so we exit this loop
-        done = True
-
-    # Set the screen background to white
-if not done:
+def create_grid():
 
     screen.fill(WHITE)
 
-    # Draw the grid lines
     for x in range(0, WINDOW_SIZE, CELL_SIZE):
         for y in range(0, WINDOW_SIZE, CELL_SIZE):
 
-            if x == CELL_SIZE * 4:  # Added
-                # Fill the rectangle with grey color
+            if x == CELL_SIZE * 4:
                 pygame.draw.rect(
-                    screen, GREY, [x, y, CELL_SIZE, CELL_SIZE])  # Changed
+                    screen, GREY, [x, y, CELL_SIZE, CELL_SIZE])  
 
             if y == CELL_SIZE * 3:
 
                 pygame.draw.rect(
-                    screen, GREY, [x, y, CELL_SIZE, CELL_SIZE])  # Changed
+                    screen, GREY, [x, y, CELL_SIZE, CELL_SIZE])  
             
-            if x == CELL_SIZE * 4 and y == CELL_SIZE * 8: # Added
-                # Set the center of the image rectangle to the center of the cell
-                drone_rect.center = (x + CELL_SIZE / 2, y + CELL_SIZE / 2) # Added
-                # Draw the image on the screen
-                screen.blit(drone, drone_rect) # Added
+            if x == CELL_SIZE * 4 and y == CELL_SIZE * 8: 
+                
+                for num in range(total_num):
+
+                    drone[f'drone_rect{num+1}'].center = (x + CELL_SIZE / 2, y + CELL_SIZE / 2)
+                    screen.blit(drone[f'{num+1}'], drone[f'drone_rect{num+1}']) 
 
             else:
-                # Draw a rectangle outline
                 pygame.draw.rect(
                     screen, BLACK, [x, y, CELL_SIZE, CELL_SIZE], 1)
-
-    # pygame.display.flip()
-
+    
     pygame.display.update([0, 0, WINDOW_SIZE, WINDOW_SIZE])
 
     pygame.time.delay(1000)
 
-    pygame.draw.rect(screen, GREY, [prev_x * CELL_SIZE, prev_y * CELL_SIZE, CELL_SIZE, CELL_SIZE]) # Added
+
+def move_drone(num, x, y):
+
+    pygame.draw.rect(screen, GREY, [drone[f'prev{num}_x'] * CELL_SIZE, drone[f'prev{num}_y'] * CELL_SIZE, CELL_SIZE, CELL_SIZE]) 
     
-    pygame.display.update([prev_x * CELL_SIZE, prev_y * CELL_SIZE, CELL_SIZE, CELL_SIZE])
+    pygame.display.update([drone[f'prev{num}_x'] * CELL_SIZE, drone[f'prev{num}_y'] * CELL_SIZE, CELL_SIZE, CELL_SIZE])
     
     pygame.time.delay(1000)
 
-    move_drone(5, 3)
-    # Update the screen with what we've drawn
+    # pixel coordinates    
+    x_pixel = x * CELL_SIZE
+    y_pixel = y * CELL_SIZE
+
+    # Set the center of the image rect to the center of the cell
+    drone[f'drone_rect{num}'].center = (x_pixel + CELL_SIZE / 2, y_pixel + CELL_SIZE / 2)
+
+    # Draw image on screen
+    screen.blit(drone[f'{num}'], drone[f'drone_rect{num}'])
+
+    drone[f'prev{num}_x'] = x
+    drone[f'prev{num}_y'] = y
+
     pygame.display.flip()
 
-    # Limit to 60 frames per second
-    # clock.tick(60)
-    pygame.display.update([5 * CELL_SIZE , 3 * CELL_SIZE , CELL_SIZE , CELL_SIZE])
-
     pygame.time.delay(1000)
 
-# Close the window and quit
-# pygame.quit()
+    return None
 
+end = 8
+start_drone2 = 0
+
+if not done:
+
+    create_grid()
+
+
+    for move in range(6, -1, -2):
+
+        move_drone(1, 4, move)
+
+        if start_drone2 == 0:
+
+            move_drone(2, 4, 8)
+            start_drone2 += 1
+
+        if abs(drone['prev1_y'] - drone['prev2_y']) > 3:
+           
+           print(abs(drone['prev1_y'] - drone['prev2_y']))
+
+           move_drone(2, 4, drone[f'prev1_y']+3)
+
+        if drone['prev1_y'] == 0:
+            break
+
+    
+    
 
