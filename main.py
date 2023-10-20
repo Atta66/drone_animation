@@ -1,4 +1,5 @@
 import pygame
+import numpy as np
 
 from drone_instance import drone_instance
 
@@ -8,13 +9,82 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 GREY = (128, 128, 128)
 
+font = pygame.font.Font(None, 22)
+
+# for probabilities comparison
+
+compare_prob = []
+
+# x,y, prob values to initiate drone
+
+compare_prob.append((3, 8, 1))
+
+# regions of interest - dead ends
+
+dead_end = {
+
+    (0,4):-1,
+    (2,2):-1,
+    (3,0):-1,
+    (6,0):-1,
+    (8,2):-1
+}
+
+coordinate_prob = {
+
+    # probability 1
+    (3,0):1, (3,2):1, (3,4):1,
+    (3,5):1, (3,6):1, (3,7):1,
+    (3,8):1,
+    (0,4):1,
+    (1,4):1,
+    (5,2):1,
+    (6,4):1, (6,2):1, (6,0):1,
+    (8,2):1,
+    
+    # probability 0
+    (2,7):0, (2,8):0, (2,6):0,
+    (2,5):0, (2,3):0, (2,0):0,
+    (2,1):0, (2,9):0,
+    (3,3):0, (3,9):0,
+    (4,7):0, (4,8):0, (4,6):0,
+    (4,5):0, (4,3):0, (4,0):0,
+    (4,1):0, (4,9):0,
+    (1,3):0, (1,1):0, (1,2):0,
+    (1,5):0,
+    (0,3):0, (0,5):0,
+    (5,1):0, (5,3):0, (5,0):0,
+    (5,5):0,
+    (7,1):0, (7,3):0, (7,0):0,
+    (7,4):0, (7,5):0,
+    (6,5):0,
+    (8,1):0, (8,3):0,
+
+    # inbetween
+    (2,4):0.7, (3,3):0.2, (4,4):0.1,
+    (2,2):0.7, (4,2):0.1, (3,1):0.2,
+    (6,1):0.7, (7,2):0.2, (6,3):0.1,
+    (5,4):0.9
+
+}
+
+covered_section = {
+
+    (3,5):0,
+    (2,4):0,
+    (2,2):0,
+    (3,3):0,
+    (5,2):0,
+    (6,1):0
+
+}
 
 # drone starting pos
 
 drone_start_x = 3
 drone_start_y = 8
 
-total_num = 2
+total_num = 7
 
 CELL_SIZE = 50
 
@@ -24,7 +94,6 @@ screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
 
 pygame.display.set_caption("Tunnel")
 
-
 drone = {}
 
 def drone_instanciater(total_num):
@@ -33,9 +102,14 @@ def drone_instanciater(total_num):
         
         drone_init = drone_instance(CELL_SIZE)
         drone[f'{num+1}'] = drone_init.start_instance()
-        drone[f'prev{num+1}_x'] = drone_start_x
-        drone[f'prev{num+1}_y'] = drone_start_y
+        drone[f'd_{num+1}'] = num+1
+        # drone[f'prev{num+1}_x'] = drone_start_x
+        # drone[f'prev{num+1}_y'] = drone_start_y
         drone[f'drone_rect{num+1}'] = drone_init.create_rect()
+        drone[f'{num+1}_ownX'] = 3
+        drone[f'{num+1}_ownY'] = 8
+        drone[f'{num+1}_coveredX'] = drone[f'{num+1}_ownX']
+        drone[f'{num+1}_coveredY'] = drone[f'{num+1}_ownY'] 
         
 drone_instanciater(total_num)
 
@@ -50,9 +124,14 @@ def create_grid():
 
             # Customize grid
 
-            if x == CELL_SIZE * 3:
+            rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+            font = pygame.font.Font(None, 22)
+            text_surface = font.render(str(int(x/50))+","+str(int(y/50)), True, (0, 0, 0))
+            text_rect = text_surface.get_rect()
+            text_rect.center = rect.center
+            screen.blit(text_surface, text_rect)
 
-                
+            if x == CELL_SIZE * 3:
 
                 pygame.draw.rect(
                     screen, GREY, [x, y, CELL_SIZE, CELL_SIZE])
@@ -75,8 +154,6 @@ def create_grid():
                 pygame.draw.rect(
                     screen, BLACK, [x, y, CELL_SIZE, CELL_SIZE], 1)
                 
-            
-
             if y == CELL_SIZE * 2:
 
                 excluded_grid = [0, 50]
@@ -89,7 +166,6 @@ def create_grid():
                 pygame.draw.rect(
                     screen, BLACK, [x, y, CELL_SIZE, CELL_SIZE], 1)
                 
-            
             if y == CELL_SIZE * 2 or y == CELL_SIZE * 4:
 
                 excluded_grid = [350, 400]
@@ -103,7 +179,6 @@ def create_grid():
                 pygame.draw.rect(
                     screen, BLACK, [x, y, CELL_SIZE, CELL_SIZE], 1)
                   
-            
             if x == CELL_SIZE * drone_start_x and y == CELL_SIZE * drone_start_y: 
                 
                 for num in range(total_num):
@@ -119,18 +194,41 @@ def create_grid():
 
     pygame.time.delay(1000)
 
+def check_prob(x, y):
 
-def move_drone(num, x, y):
+    if coordinate_prob[(x,y)] > 0:
 
-    pygame.draw.rect(screen, GREY, [drone[f'prev{num}_x'] * CELL_SIZE, drone[f'prev{num}_y'] * CELL_SIZE, CELL_SIZE, CELL_SIZE])
+        compare_prob.append((x, y, coordinate_prob[(x,y)]))
+
+junction_coord = [(3,4), (6,2), (3,2), (6,4)]
+
+def move_drone(num, compare_prob):
+
+    # extract max prob from compare_prob and then use the x, y coordinates corresponding to max prob
+
+    max_prob = max(compare_prob, key=lambda x: x[2])
+
+    x = max_prob[0]
+    y = max_prob[1]
+
+    print("probabilities > 0 at current location: ", compare_prob)
+
+    print("of which max belongs to coordinates: (%d,%d)" % (x,y))
+
+    if (x,y) in covered_section and covered_section[(x,y)] == 0:
+        covered_section[(x,y)] = 1
+
+    
+        
+    pygame.draw.rect(screen, GREY, [drone[f'{num}_ownX'] * CELL_SIZE, drone[f'{num}_ownY'] * CELL_SIZE, CELL_SIZE, CELL_SIZE])
     pygame.draw.rect(
-                    screen, BLACK, [drone[f'prev{num}_x'] * CELL_SIZE, drone[f'prev{num}_y'] * CELL_SIZE, CELL_SIZE, CELL_SIZE], 1)
+                    screen, BLACK, [drone[f'{num}_ownX'] * CELL_SIZE, drone[f'{num}_ownY'] * CELL_SIZE, CELL_SIZE, CELL_SIZE], 1)
     
-    pygame.display.update([drone[f'prev{num}_x'] * CELL_SIZE, drone[f'prev{num}_y'] * CELL_SIZE, CELL_SIZE, CELL_SIZE])
+    pygame.display.update([drone[f'{num}_ownX'] * CELL_SIZE, drone[f'{num}_ownY'] * CELL_SIZE, CELL_SIZE, CELL_SIZE])
     
-    pygame.time.delay(1000)
+    # pygame.time.delay(2000)
 
-    # pixel coordinates    
+    # grid coordinates    
     x_pixel = x * CELL_SIZE
     y_pixel = y * CELL_SIZE
 
@@ -140,68 +238,139 @@ def move_drone(num, x, y):
     # Draw image on screen
     screen.blit(drone[f'{num}'], drone[f'drone_rect{num}'])
 
-    drone[f'prev{num}_x'] = x
-    drone[f'prev{num}_y'] = y
+    drone[f'{num}_ownX'] = x
+    drone[f'{num}_ownY'] = y
 
     pygame.display.flip()
 
-    pygame.time.delay(1000)
+    if (x,y) in junction_coord:
+        print("junction with x,y: (%d,%d)" % (x,y))
 
-    if x == 3 and y == 2 or x == 3 and y == 4:
+    elif (x, y) in dead_end:
+        print("dead_end with x,y: (%d,%d)" % (x, y))
 
-        return True
-    
     else:
-        
-        return False
+        print("current x,y: (%d,%d)" % (x,y))
+
+    pygame.time.delay(500)
+
+    return max_prob[0], max_prob[1]
 
 
-def update_weights():
 
-    return None
+def search_find(own_x, own_y, covered_x, covered_y, drone):
+
+    for x in range(own_x-1, own_x+2, 1):
+
+        for y in range(own_y-1, own_y+2, 1):
+
+            if x == 5 and y == 4:
+                print(coordinate_prob)
+                print(covered_section)
+
+            if (own_x, own_y) in junction_coord and (x,y) in covered_section and covered_section[(x,y)] ==1:
+                coordinate_prob[(x,y)] = 0.01
+            
+            if (x,y) == (own_x, own_y):
+                continue
+
+            # out of displayed grid
+            elif x < 0 or y < 0 or x > 8 or y > 8:
+                continue
+            
+            # in case we are at the dead end: previous pos's probability is important and should not be ignored
+            elif (own_x, own_y) in dead_end and (x,y) == (covered_x, covered_y):
+                check_prob(x,y)
 
 
-def check_pos():
+            # to keep going in same direction 
+            elif (x,y) == (covered_x, covered_y):
+                continue
 
-    return None
+            # at junction check which section has been covered
+            # elif (x,y) in covered_section and covered_section[(x,y)] == 1 and (own_x,own_y) in junction_coord:
+            #     continue
 
-end = 8
-start_drone2 = 0
+            else:
+                check_prob(x,y)
+
+    # important to know which direction the drone is moving
+    covered_x, covered_y = own_x, own_y
+
+    # update self pos
+    own_x, own_y = move_drone(drone,compare_prob)
+
+    compare_prob.clear()
+
+    return own_x, own_y, covered_x, covered_y
+
 
 if not done:
 
     create_grid()
 
-    leader = 1
+    # leader = 1
+    # follower = leader + 1
 
-    follower = leader + 1
+    # place drones on grid
+
+    move_drone(1, compare_prob)
+
+    # for drone_placer in range(total_num):
+    #     move_drone(drone_placer+1, compare_prob)
+
+    # print(drone)
+
+    # current position
 
 
-    for move in range(7, -1, -1):
 
-        if move_drone(leader, 3, move) == True:
-            print("at junction")
-            leader += 1
+    # own_x = 3
+    # own_y = 8
+    # covered_x = own_x
+    # covered_y = own_y
+
+    drone_inGrid = 1
+    grid_step = 0
+
+    while(True):
+
+        for uav in range(drone_inGrid):
+            uav += 1
+            print(uav)
+            drone[f'{uav}_ownX'], drone[f'{uav}_ownY'], drone[f'{uav}_coveredX'], drone[f'{uav}_coveredY'] = search_find(drone[f'{uav}_ownX'],drone[f'{uav}_ownY'],
+                                                                             drone[f'{uav}_coveredX'], drone[f'{uav}_coveredY'],
+                                                                             drone[f'd_{uav}'])
         
-        else:
-            pass
+        grid_step += 1
+
+        if grid_step % 2 == 0:
+            drone_inGrid += 1
+            # print(drone_inGrid)
+
+            if drone_inGrid == 8:
+                drone_inGrid = 7
 
 
+            
+        
 
-        if start_drone2 == 0:
 
-            move_drone(follower, 3, 8)
-            start_drone2 += 1
+        # drone['1_ownX'], drone['1_ownY'], drone['1_coveredX'], drone['1_coveredY'] = search_find(drone['1_ownX'],drone['1_ownY'],
+        #                                                                      drone['1_coveredX'], drone['1_coveredY'],
+        #                                                                      drone['d_1'])
+        # grid_step += 1
+        
 
-        if abs(drone[f'prev{leader}_y'] - drone[f'prev{follower}_y']) > 2:
-           
-           print(abs(drone[f'prev{leader}_y'] - drone[f'prev{follower}_y']))
+        # if grid_step % 2 == 0:
 
-           move_drone(2, 3, drone[f'prev{leader}_y']+2)
+        #     follower += 1
 
-        if drone[f'prev{leader}_y'] == 0:
-            break
+            
+        
+        #       drone[f'{num+1}_ownX'], drone[f'{num+1}_ownY'],
+        # drone[f'{num+1}_coveredX'], drone[f'{num+1}_coveredX'] = search_find(drone[f'{num}_ownX'],drone[f'{num+1}_ownY'],
+        #                                                                      drone[f'{num}_coveredX'], drone[f'{num+1}_coveredY'],
+        #                                                                      drone[f'{num}'])
 
-    
-    
-
+# the first time 3,8 is already in the dictionary that is why the drone moves to 3, 8 (stays in the same square)
